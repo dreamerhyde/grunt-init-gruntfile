@@ -2,72 +2,96 @@
 module.exports = function(grunt) {
 
   // Project configuration.
-  grunt.initConfig({{% if (min_concat) { %}
-    // Metadata.{% if (package_json) { %}
+  grunt.initConfig({
+    // Metadata.
     pkg: grunt.file.readJSON('package.json'),
-    banner: '/*! <%= pkg.title || pkg.name %> - v<%= pkg.version %> - ' +
-      '<%= grunt.template.today("yyyy-mm-dd") %>\n' +
-      '<%= pkg.homepage ? "* " + pkg.homepage + "\\n" : "" %>' +
-      '* Copyright (c) <%= grunt.template.today("yyyy") %> <%= pkg.author.name %>;' +
-      ' Licensed <%= _.pluck(pkg.licenses, "type").join(", ") %> */\n',{% } else { %}
-    meta: {
-      version: '0.1.0'
-    },
-    banner: '/*! PROJECT_NAME - v<%= meta.version %> - ' +
-      '<%= grunt.template.today("yyyy-mm-dd") %>\n' +
-      '* http://PROJECT_WEBSITE/\n' +
-      '* Copyright (c) <%= grunt.template.today("yyyy") %> ' +
-      'YOUR_NAME; Licensed MIT */\n',{% } } %}
+    banner: '/*!\n' +
+      ' * <%= pkg.title || pkg.author.name %> - v<%= pkg.version %> - ' +
+      '<%= grunt.template.today("yyyy-mm-dd h:mmtt") %>\n' +
+      ' * <%= pkg.description %>\n' +
+      ' *\n' +
+      ' * Copyright (c) <%= grunt.template.today("yyyy") %> <%= pkg.author.name %>;' +
+      ' Licensed MIT\n' +
+      ' */\n',
     // Task configuration.{% if (min_concat) { %}
-    concat: {
-      options: {
-        banner: '<%= banner %>',
-        stripBanners: true
-      },
-      dist: {
-        src: ['{%= lib_dir %}/{%= file_name %}.js'],
-        dest: 'dist/{%= file_name %}.js'
-      }
-    },
     uglify: {
       options: {
+        compress: {
+          drop_console: true
+        },
+        mangle: {
+          except: ['jQuery']
+        },
         banner: '<%= banner %>'
       },
       dist: {
-        src: '<%= concat.dist.dest %>',
-        dest: 'dist/{%= file_name %}.min.js'
+        src : ['src/js/*.js'],
+        dest : 'dist/js/<%= pkg.name %>.min.js'
       }
     },{% } %}
     jshint: {
       options: {
-        curly: true,
-        eqeqeq: true,
-        immed: true,
-        latedef: true,
-        newcap: true,
-        noarg: true,
-        sub: true,
-        undef: true,
-        unused: true,
-        boss: true,
-        eqnull: true,{% if (dom) { %}
-        browser: true,{% } %}
-        globals: {{% if (jquery) { %}
+        browser: true,
+        globals: {
           jQuery: true
-        {% } %}}
+        }
       },
       gruntfile: {
         src: 'Gruntfile.js'
       },
       lib_test: {
-        src: ['{%= lib_dir %}/**/*.js', '{%= test_dir %}/**/*.js']
+        src: ['{%= lib_dir %}/**/*.js']
       }
-    },{% if (dom) { %}
-    {%= test_task %}: {
-      files: ['{%= test_dir %}/**/*.html']
-    },{% } else { %}
-    {%= test_task %}: {
-      files: ['{%= test_dir %}/**/*_test.js']
+    },{% if (compass) { %}
+    compass: {
+      dev: {
+        options: {
+          specify: ['{%= lib_dir %}/sass/*.scss'],
+          banner: '<%= banner %>',
+          sassDir: '{%= lib_dir %}/sass',
+          cssDir: '{%= lib_dir %}/css',
+          imagesDir: '{%= lib_dir %}/img',
+          noLineComments: false,
+          force: true,
+          outputStyle: 'expanded'
+        }
+      },
+      dist: {
+        options: {
+          specify: ['{%= lib_dir %}/sass/*.scss'],
+          banner: '<%= banner %>',
+          sassDir: '{%= lib_dir %}/sass',
+          cssDir: 'dist/css',
+          imagesDir: '{%= lib_dir %}/img',
+          noLineComments: true,
+          force: true,
+          outputStyle: 'compressed'
+        }
+      }
+    },{% } %}{% if (injector) { %}
+    injector: {
+      dev: {
+        files: (function() {
+          var files = {};
+          grunt.file.recurse('.', function(abspath, rootdir, subdir, filename) {
+            if (!Boolean(subdir) && abspath.match(/.*\.(html|php)$/ig)) {
+              files[filename] = ['{%= lib_dir %}/js/*.js', '{%= lib_dir %}/css/*.css'];
+            }
+          });
+          return files;
+        }())
+      },
+      dist: {
+        files: (function() {
+          var files = {};
+          grunt.file.recurse('.', function(abspath, rootdir, subdir, filename) {
+            if (!Boolean(subdir) && abspath.match(/.*\.(html|php)$/ig)) {
+              files[filename] = ['dist/js/*.min.js', 'dist/css/*.css'];
+            }
+          });
+          return files;
+        }())
+      }
     },{% } %}
     watch: {
       gruntfile: {
@@ -76,19 +100,25 @@ module.exports = function(grunt) {
       },
       lib_test: {
         files: '<%= jshint.lib_test.src %>',
-        tasks: ['jshint:lib_test', '{%= test_task %}']
-      }
+        tasks: ['jshint:lib_test']
+      }{% if (compass) { %},
+      compass: {
+        files: '{%= lib_dir %}/sass/*.scss',
+        tasks: ['compass:dev']
+      }{% } %}
     }
   });
 
   // These plugins provide necessary tasks.{% if (min_concat) { %}
-  grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-contrib-uglify');{% } %}
-  grunt.loadNpmTasks('grunt-contrib-{%= test_task %}');
   grunt.loadNpmTasks('grunt-contrib-jshint');
-  grunt.loadNpmTasks('grunt-contrib-watch');
+  grunt.loadNpmTasks('grunt-contrib-watch');{% if (compass) { %}
+  grunt.loadNpmTasks('grunt-contrib-compass');{% } %}{% if (injector) { %}
+  grunt.loadNpmTasks('grunt-injector');{% } %}
 
   // Default task.
-  grunt.registerTask('default', ['jshint', '{%= test_task %}'{%= min_concat ? ", 'concat', 'uglify'" : "" %}]);
+  grunt.registerTask('default', ['jshint'{%= min_concat ? ", 'uglify'" : "" %}{%= compass ? ", 'compass:dev'" : "" %}{%= injector ? ", 'injector:dev'" : "" %}]);
+  // Release Task
+  grunt.registerTask('release', ['jshint'{%= min_concat ? ", 'uglify'" : "" %}{%= compass ? ", 'compass:dist'" : "" %}{%= injector ? ", 'injector:dist'" : "" %}]);
 
 };
